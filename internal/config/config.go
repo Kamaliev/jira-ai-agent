@@ -24,7 +24,7 @@ func GeminiModelOptions() []huh.Option[string] {
 	return []huh.Option[string]{
 		huh.NewOption("Gemini 3 Flash", "gemini-3-flash-preview"),
 		huh.NewOption("Gemini 2.5 Flash", "gemini-2.5-flash"),
-		huh.NewOption("Gemini 2.5 Flash", "gemini-2.5-flash-lite"),
+		huh.NewOption("Gemini 2.5 Flash Lite", "gemini-2.5-flash-lite"),
 	}
 }
 

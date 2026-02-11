@@ -30,8 +30,8 @@ func NewAssistant(ctx context.Context, apiKey, model string) (*Assistant, error)
 	return &Assistant{client: client, model: model}, nil
 }
 
-func (a *Assistant) StartConversation(ctx context.Context, issues []jira.Issue, loggedSeconds int) (string, error) {
-	systemPrompt := buildSystemPrompt(issues, loggedSeconds)
+func (a *Assistant) StartConversation(ctx context.Context, issues []jira.Issue, loggedSeconds int, date string) (string, error) {
+	systemPrompt := buildSystemPrompt(issues, loggedSeconds, date)
 
 	var err error
 	a.chat, err = a.client.Chats.Create(ctx, "models/"+a.model, &genai.GenerateContentConfig{
@@ -69,11 +69,13 @@ func (a *Assistant) sendWithRetry(ctx context.Context, text string) (*genai.Gene
 		if err == nil {
 			return resp, nil
 		}
-		if !strings.Contains(err.Error(), "429") && !strings.Contains(err.Error(), "RESOURCE_EXHAUSTED") {
+		errMsg := err.Error()
+		if !strings.Contains(errMsg, "429") && !strings.Contains(errMsg, "RESOURCE_EXHAUSTED") &&
+			!strings.Contains(errMsg, "503") && !strings.Contains(errMsg, "UNAVAILABLE") {
 			return nil, err
 		}
 		wait := time.Duration(30*(attempt+1)) * time.Second
-		fmt.Printf("\nRate limit hit, retrying in %v...\n", wait)
+		fmt.Printf("\nСервер временно недоступен, повтор через %v...\n", wait)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -152,10 +154,17 @@ func formatDuration(seconds int) string {
 	return fmt.Sprintf("%dm", m)
 }
 
-func buildSystemPrompt(issues []jira.Issue, loggedSeconds int) string {
+func buildSystemPrompt(issues []jira.Issue, loggedSeconds int, date string) string {
 	var sb strings.Builder
 	for _, issue := range issues {
 		fmt.Fprintf(&sb, "- %s: %s\n", issue.Key, issue.Summary)
+	}
+
+	dayLabel := "сегодня"
+	dayLabelAccusative := "чем ты сегодня занимался"
+	if date != "" {
+		dayLabel = "за " + date
+		dayLabelAccusative = "чем ты занимался " + date
 	}
 
 	remainingSeconds := 8*3600 - loggedSeconds
@@ -165,63 +174,55 @@ func buildSystemPrompt(issues []jira.Issue, loggedSeconds int) string {
 
 	timeInfo := ""
 	if loggedSeconds > 0 {
-		timeInfo = fmt.Sprintf(`
-УЖЕ ЗАЛОГИРОВАНО СЕГОДНЯ: %s
-ОСТАЛОСЬ ЗАЛОГИРОВАТЬ: %s (рабочий день = 8h)
-`, formatDuration(loggedSeconds), formatDuration(remainingSeconds))
+		timeInfo = fmt.Sprintf("\nУЖЕ ЗАЛОГИРОВАНО %s: %s\nОСТАЛОСЬ ЗАЛОГИРОВАТЬ: %s (рабочий день = 8h)\n",
+			strings.ToUpper(dayLabel), formatDuration(loggedSeconds), formatDuration(remainingSeconds))
 	} else {
-		timeInfo = "\nСЕГОДНЯ ЕЩЁ НИЧЕГО НЕ ЗАЛОГИРОВАНО. Рабочий день = 8h.\n"
+		timeInfo = fmt.Sprintf("\n%s ЕЩЁ НИЧЕГО НЕ ЗАЛОГИРОВАНО. Рабочий день = 8h.\n", strings.ToUpper(dayLabel))
 	}
 
-	return fmt.Sprintf(`Ты - дружелюбный AI-ассистент для логирования времени работы в Jira Tempo.
-
-Твоя задача - помочь пользователю залогировать рабочее время за сегодня.
-%s
-ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ:
-%s
-ФЛОУ ДИАЛОГА (строго по шагам):
-
-ШАГ 1 — Что делал?
-- Приветствуй пользователя и попроси свободно рассказать, чем он занимался сегодня.
-- НЕ спрашивай о каждой задаче по отдельности.
-- Пользователь описывает активности своими словами.
-
-ШАГ 2 — Сопоставление с задачами
-- На основе рассказа предложи, к каким задачам из списка относится каждая активность.
-- Если пользователь явно упомянул ключ задачи (например PROJ-456), которого нет в списке — прими его как есть.
-- Если что-то неясно (не понятно к какой задаче отнести) — уточни.
-- Дождись подтверждения от пользователя, что сопоставление верное.
-
-ШАГ 3 — Сколько времени?
-- Спроси, сколько времени пользователь потратил на каждую из задач.
-- Формат времени: 2h, 30m, 2h 30m, 1.5h.
-- Учитывай уже залогированное время — суммарно за день должно быть ровно 8h.
-- Если сумма нового времени + уже залогированного не равна 8h, обрати на это внимание пользователя.
-
-ШАГ 4 — Итог
-- Покажи финальную сводку в виде списка:
-  Задача | Время | Что делал
-- Попроси подтверждение.
-- После подтверждения верни JSON.
-
-ВАЖНО:
-- Общайся естественно, как живой человек
-- Не используй формальный тон
-- Будь позитивным и поддерживающим
-- Говори на русском языке
-- Когда пользователь подтвердил сводку, верни JSON в формате:
-`+"```json\n"+`{
-  "work_logs": [
-    {
-      "issue_key": "PROJ-123",
-      "time_spent": "2h 30m",
-      "description": "Описание работы"
-    }
-  ],
-  "ready_to_submit": true
-}
-`+"```\n"+`
-Начинай диалог!`, timeInfo, sb.String())
+	return fmt.Sprintf("Ты - дружелюбный AI-ассистент для логирования времени работы в Jira Tempo.\n\n"+
+		"Твоя задача - помочь пользователю залогировать рабочее время %s.\n"+
+		"%s\n"+
+		"ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ:\n%s\n"+
+		"ФЛОУ ДИАЛОГА (строго по шагам):\n\n"+
+		"ШАГ 1 — Что делал?\n"+
+		"- Приветствуй пользователя и попроси свободно рассказать, %s.\n"+
+		"- НЕ спрашивай о каждой задаче по отдельности.\n"+
+		"- Пользователь описывает активности своими словами.\n\n"+
+		"ШАГ 2 — Сопоставление с задачами\n"+
+		"- На основе рассказа предложи, к каким задачам из списка относится каждая активность.\n"+
+		"- Если пользователь явно упомянул ключ задачи (например PROJ-456), которого нет в списке — прими его как есть.\n"+
+		"- Если что-то неясно (не понятно к какой задаче отнести) — уточни.\n"+
+		"- Дождись подтверждения от пользователя, что сопоставление верное.\n\n"+
+		"ШАГ 3 — Сколько времени?\n"+
+		"- Спроси, сколько времени пользователь потратил на каждую из задач.\n"+
+		"- Формат времени: 2h, 30m, 2h 30m, 1.5h.\n"+
+		"- Учитывай уже залогированное время — суммарно за день должно быть ровно 8h.\n"+
+		"- Если сумма нового времени + уже залогированного не равна 8h, обрати на это внимание пользователя.\n\n"+
+		"ШАГ 4 — Итог\n"+
+		"- Покажи финальную сводку в виде списка:\n"+
+		"  Задача | Время | Что делал\n"+
+		"- Попроси подтверждение.\n"+
+		"- После подтверждения верни JSON.\n\n"+
+		"ВАЖНО:\n"+
+		"- Общайся естественно, как живой человек\n"+
+		"- Не используй формальный тон\n"+
+		"- Будь позитивным и поддерживающим\n"+
+		"- Говори на русском языке\n"+
+		"- Когда пользователь подтвердил сводку, верни JSON в формате:\n"+
+		"```json\n"+
+		"{\n"+
+		"  \"work_logs\": [\n"+
+		"    {\n"+
+		"      \"issue_key\": \"PROJ-123\",\n"+
+		"      \"time_spent\": \"2h 30m\",\n"+
+		"      \"description\": \"Описание работы\"\n"+
+		"    }\n"+
+		"  ],\n"+
+		"  \"ready_to_submit\": true\n"+
+		"}\n"+
+		"```\n"+
+		"Начинай диалог!", dayLabel, timeInfo, sb.String(), dayLabelAccusative)
 }
 
 func extractText(resp *genai.GenerateContentResponse) string {

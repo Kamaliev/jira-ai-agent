@@ -59,13 +59,21 @@ func main() {
 	defer geminiAssistant.Close()
 
 	runner := session.NewRunner(jiraClient, geminiAssistant)
-	if err := runner.Run(ctx); err != nil {
+
+	var runErr error
+	if len(os.Args) > 1 && os.Args[1] == "period" {
+		runErr = runner.RunPeriod(ctx)
+	} else {
+		runErr = runner.Run(ctx)
+	}
+
+	if runErr != nil {
 		if ctx.Err() != nil {
 			pterm.Println()
 			pterm.Println(pterm.Gray("Прервано пользователем. До встречи!"))
 			os.Exit(0)
 		}
-		pterm.Error.Println(err.Error())
+		pterm.Error.Println(runErr.Error())
 		os.Exit(1)
 	}
 }

@@ -101,3 +101,37 @@ func PrintError(msg string) {
 func PrintStatus(msg string) {
 	pterm.Println(pterm.Gray(msg))
 }
+
+func PrintPeriodStatus(days []DayStatus) {
+	tableData := pterm.TableData{
+		{"Дата", "День недели", "Залогировано", "Статус"},
+	}
+	for _, d := range days {
+		h := d.LoggedSeconds / 3600
+		m := (d.LoggedSeconds % 3600) / 60
+		logged := fmt.Sprintf("%dh %dm", h, m)
+
+		status := pterm.FgRed.Sprint("Не заполнено")
+		if d.Filled {
+			status = pterm.FgGreen.Sprint("OK")
+		}
+
+		tableData = append(tableData, []string{
+			d.Date,
+			d.Weekday,
+			logged,
+			status,
+		})
+	}
+
+	pterm.DefaultTable.WithHasHeader().WithBoxed().WithData(tableData).Render()
+	pterm.Println()
+}
+
+func PrintDayHeader(date string) {
+	pterm.Println()
+	pterm.DefaultHeader.WithBackgroundStyle(pterm.NewStyle(pterm.BgYellow)).
+		WithTextStyle(pterm.NewStyle(pterm.FgBlack, pterm.Bold)).
+		Printfln("=== %s ===", date)
+	pterm.Println()
+}

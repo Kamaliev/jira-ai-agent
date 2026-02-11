@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/huh"
 	"github.com/pterm/pterm"
 )
 
@@ -42,4 +44,32 @@ func IsExitCommand(input string) bool {
 		return true
 	}
 	return false
+}
+
+func ReadDateRange() (startDate, endDate string, err error) {
+	validateDate := func(s string) error {
+		if _, err := time.Parse("2006-01-02", s); err != nil {
+			return fmt.Errorf("неверный формат даты, используйте ГГГГ-ММ-ДД")
+		}
+		return nil
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Дата начала (ГГГГ-ММ-ДД)").
+				Value(&startDate).
+				Validate(validateDate),
+			huh.NewInput().
+				Title("Дата конца (ГГГГ-ММ-ДД)").
+				Value(&endDate).
+				Validate(validateDate),
+		),
+	)
+
+	if err := form.Run(); err != nil {
+		return "", "", fmt.Errorf("ввод дат: %w", err)
+	}
+
+	return startDate, endDate, nil
 }

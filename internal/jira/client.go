@@ -99,10 +99,13 @@ func (c *Client) searchIssues(ctx context.Context, jql string) ([]Issue, error) 
 	return issues, nil
 }
 
-func (c *Client) LogWork(ctx context.Context, issueKey string, timeSpentSeconds int, description string) error {
+func (c *Client) LogWork(ctx context.Context, issueKey string, timeSpentSeconds int, description string, started time.Time) error {
 	payload := worklogPayload{
 		TimeSpentSeconds: timeSpentSeconds,
 		Comment:          description,
+	}
+	if !started.IsZero() {
+		payload.Started = started.Format("2006-01-02T09:00:00.000+0000")
 	}
 
 	body, err := json.Marshal(payload)
@@ -162,6 +165,41 @@ func (c *Client) GetTodayLoggedSeconds(ctx context.Context) (int, error) {
 	}
 
 	return totalSeconds, nil
+}
+
+func (c *Client) GetLoggedSecondsForDateRange(ctx context.Context, startDate, endDate string) (map[string]int, error) {
+	accountID, err := c.getMyAccountID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get current user: %w", err)
+	}
+
+	jql := fmt.Sprintf(`worklogDate >= "%s" AND worklogDate <= "%s" AND worklogAuthor = currentUser()`, startDate, endDate)
+	issues, err := c.searchIssues(ctx, jql)
+	if err != nil {
+		return nil, fmt.Errorf("search worklogs: %w", err)
+	}
+
+	result := make(map[string]int)
+	for _, issue := range issues {
+		worklogs, err := c.getIssueWorklogs(ctx, issue.Key)
+		if err != nil {
+			continue
+		}
+		for _, wl := range worklogs {
+			if wl.Author.AccountID != accountID && wl.Author.Name != accountID {
+				continue
+			}
+			// Extract date from "2006-01-02T15:04:05.000+0000"
+			if len(wl.Started) >= 10 {
+				day := wl.Started[:10]
+				if day >= startDate && day <= endDate {
+					result[day] += wl.TimeSpentSeconds
+				}
+			}
+		}
+	}
+
+	return result, nil
 }
 
 func (c *Client) getMyAccountID(ctx context.Context) (string, error) {

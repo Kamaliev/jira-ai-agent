@@ -30,6 +30,7 @@ type issueStatus struct {
 type worklogPayload struct {
 	TimeSpentSeconds int    `json:"timeSpentSeconds"`
 	Comment          string `json:"comment"`
+	Started          string `json:"started,omitempty"`
 }
 
 type myselfResponse struct {
