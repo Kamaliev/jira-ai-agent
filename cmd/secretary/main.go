@@ -14,7 +14,14 @@ import (
 	"github.com/pterm/pterm"
 )
 
+var Version = "dev"
+
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Println("sj version", Version)
+		return
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "config" {
 		if _, err := config.RunSetup(); err != nil {
 			pterm.Error.Println(err.Error())
