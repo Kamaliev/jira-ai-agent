@@ -5,11 +5,21 @@ import (
 	"fmt"
 	"time"
 
+	"go-secretary/internal/config"
 	"go-secretary/internal/gemini"
 	"go-secretary/internal/jira"
 	"go-secretary/internal/ui"
 
+	"github.com/charmbracelet/huh"
 	"github.com/pterm/pterm"
+)
+
+type commandAction int
+
+const (
+	actionContinue commandAction = iota
+	actionExit
+	actionRestart
 )
 
 type Runner struct {
@@ -69,6 +79,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		ui.PrintStatus(fmt.Sprintf("Сегодня уже залогировано: %dh %dm", h, m))
 	}
 
+	ui.PrintCommands()
 	ui.PrintStatus("Расскажи AI-ассистенту, чем ты сегодня занимался...")
 	time.Sleep(1 * time.Second)
 
@@ -159,6 +170,8 @@ func (r *Runner) RunPeriod(ctx context.Context) error {
 		return nil
 	}
 
+	ui.PrintCommands()
+
 	// Process each unfilled day
 	for _, day := range unfilledDays {
 		ui.PrintDayHeader(fmt.Sprintf("%s, %s", day.Weekday, day.Date))
@@ -186,6 +199,7 @@ func (r *Runner) RunPeriod(ctx context.Context) error {
 // If date is empty, worklogs are logged with current time (today mode).
 // If date is set, worklogs are logged with that specific date.
 func (r *Runner) runConversation(ctx context.Context, allIssues []jira.Issue, loggedSeconds int, date string) error {
+startConversation:
 	response, err := r.gemini.StartConversation(ctx, allIssues, loggedSeconds, date)
 	if err != nil {
 		ui.PrintError("Ошибка при общении с Gemini: " + err.Error())
@@ -210,6 +224,20 @@ func (r *Runner) runConversation(ctx context.Context, allIssues []jira.Issue, lo
 			return nil
 		}
 
+		// Check for slash commands
+		if cmd, ok := ui.ParseCommand(userInput); ok {
+			action := r.executeCommand(cmd)
+			switch action {
+			case actionExit:
+				ui.PrintFarewell()
+				return nil
+			case actionRestart:
+				goto startConversation
+			default:
+				continue
+			}
+		}
+
 		thinkSpinner, _ := pterm.DefaultSpinner.
 			WithRemoveWhenDone(true).
 			Start("Gemini думает...")
@@ -217,7 +245,7 @@ func (r *Runner) runConversation(ctx context.Context, allIssues []jira.Issue, lo
 		thinkSpinner.Stop()
 		if err != nil {
 			ui.PrintError("Ошибка при общении с Gemini: " + err.Error())
-			return err
+			continue
 		}
 		ui.PrintTypewriter(response)
 	}
@@ -238,6 +266,55 @@ func (r *Runner) runConversation(ctx context.Context, allIssues []jira.Issue, lo
 	}
 
 	return r.handleSubmissionForDate(ctx, workLogs, date)
+}
+
+func (r *Runner) executeCommand(cmd ui.Command) commandAction {
+	switch cmd.Name {
+	case "/help":
+		ui.PrintCommands()
+		return actionContinue
+	case "/exit":
+		return actionExit
+	case "/clear":
+		fmt.Print("\033[H\033[2J")
+		return actionContinue
+	case "/model":
+		return r.handleModelSwitch()
+	case "/config":
+		cfg, err := config.RunSetup()
+		if err != nil {
+			ui.PrintError("Ошибка настройки: " + err.Error())
+			return actionContinue
+		}
+		r.gemini.SetModel(cfg.GeminiModel)
+		ui.PrintStatus("Настройки обновлены.")
+		return actionContinue
+	default:
+		ui.PrintError("Неизвестная команда: " + cmd.Name)
+		ui.PrintCommands()
+		return actionContinue
+	}
+}
+
+func (r *Runner) handleModelSwitch() commandAction {
+	var model string
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Выберите модель Gemini").
+				Options(config.GeminiModelOptions()...).
+				Value(&model),
+		),
+	)
+
+	if err := form.Run(); err != nil {
+		ui.PrintError("Ошибка выбора модели: " + err.Error())
+		return actionContinue
+	}
+
+	r.gemini.SetModel(model)
+	ui.PrintStatus("Модель изменена на: " + model)
+	return actionRestart
 }
 
 func (r *Runner) handleSubmissionForDate(ctx context.Context, workLogs []gemini.ParsedWorkLog, date string) error {

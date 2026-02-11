@@ -95,7 +95,7 @@ func PrintFarewell() {
 }
 
 func PrintError(msg string) {
-	pterm.Error.Println(msg)
+	pterm.Println(pterm.Gray("⚠ " + msg))
 }
 
 func PrintStatus(msg string) {

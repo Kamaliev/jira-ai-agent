@@ -10,6 +10,7 @@ import (
 	"go-secretary/internal/jira"
 	"go-secretary/internal/timeparse"
 
+	"github.com/pterm/pterm"
 	"google.golang.org/genai"
 )
 
@@ -75,7 +76,7 @@ func (a *Assistant) sendWithRetry(ctx context.Context, text string) (*genai.Gene
 			return nil, err
 		}
 		wait := time.Duration(30*(attempt+1)) * time.Second
-		fmt.Printf("\nСервер временно недоступен, повтор через %v...\n", wait)
+		pterm.Println(pterm.Gray(fmt.Sprintf("⚠ %s — повтор через %v...", errMsg, wait)))
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -136,6 +137,15 @@ func (a *Assistant) ExtractWorkLogs(text string) []ParsedWorkLog {
 	}
 
 	return logs
+}
+
+func (a *Assistant) SetModel(model string) {
+	a.model = model
+	a.chat = nil
+}
+
+func (a *Assistant) Model() string {
+	return a.model
 }
 
 func (a *Assistant) Close() {
