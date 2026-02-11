@@ -16,9 +16,10 @@ import (
 type Assistant struct {
 	client *genai.Client
 	chat   *genai.Chat
+	model  string
 }
 
-func NewAssistant(ctx context.Context, apiKey string) (*Assistant, error) {
+func NewAssistant(ctx context.Context, apiKey, model string) (*Assistant, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  apiKey,
 		Backend: genai.BackendGeminiAPI,
@@ -26,14 +27,14 @@ func NewAssistant(ctx context.Context, apiKey string) (*Assistant, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create genai client: %w", err)
 	}
-	return &Assistant{client: client}, nil
+	return &Assistant{client: client, model: model}, nil
 }
 
-func (a *Assistant) StartInterview(ctx context.Context, issues []jira.Issue) (string, error) {
-	systemPrompt := buildSystemPrompt(issues)
+func (a *Assistant) StartConversation(ctx context.Context, issues []jira.Issue, loggedSeconds int) (string, error) {
+	systemPrompt := buildSystemPrompt(issues, loggedSeconds)
 
 	var err error
-	a.chat, err = a.client.Chats.Create(ctx, "models/gemini-3-flash-preview", &genai.GenerateContentConfig{
+	a.chat, err = a.client.Chats.Create(ctx, "models/"+a.model, &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(systemPrompt, genai.RoleUser),
 	}, nil)
 	if err != nil {
@@ -139,33 +140,76 @@ func (a *Assistant) Close() {
 	// genai client doesn't require explicit close
 }
 
-func buildSystemPrompt(issues []jira.Issue) string {
+func formatDuration(seconds int) string {
+	h := seconds / 3600
+	m := (seconds % 3600) / 60
+	if h > 0 && m > 0 {
+		return fmt.Sprintf("%dh %dm", h, m)
+	}
+	if h > 0 {
+		return fmt.Sprintf("%dh", h)
+	}
+	return fmt.Sprintf("%dm", m)
+}
+
+func buildSystemPrompt(issues []jira.Issue, loggedSeconds int) string {
 	var sb strings.Builder
 	for _, issue := range issues {
 		fmt.Fprintf(&sb, "- %s: %s\n", issue.Key, issue.Summary)
 	}
 
+	remainingSeconds := 8*3600 - loggedSeconds
+	if remainingSeconds < 0 {
+		remainingSeconds = 0
+	}
+
+	timeInfo := ""
+	if loggedSeconds > 0 {
+		timeInfo = fmt.Sprintf(`
+УЖЕ ЗАЛОГИРОВАНО СЕГОДНЯ: %s
+ОСТАЛОСЬ ЗАЛОГИРОВАТЬ: %s (рабочий день = 8h)
+`, formatDuration(loggedSeconds), formatDuration(remainingSeconds))
+	} else {
+		timeInfo = "\nСЕГОДНЯ ЕЩЁ НИЧЕГО НЕ ЗАЛОГИРОВАНО. Рабочий день = 8h.\n"
+	}
+
 	return fmt.Sprintf(`Ты - дружелюбный AI-ассистент для логирования времени работы в Jira Tempo.
 
-Твоя задача - провести интервью с пользователем о его работе за сегодня.
-
-ДОСТУПНЫЕ ЗАДАЧИ В РАБОТЕ:
+Твоя задача - помочь пользователю залогировать рабочее время за сегодня.
 %s
-ФОРМАТ РАБОТЫ:
-1. Приветствуй пользователя тепло и дружелюбно
-2. Объясни, что будешь спрашивать о каждой задаче
-3. Для каждой задачи спроси:
-   - Работал ли он над ней сегодня?
-   - Сколько времени потратил? (формат: 2h, 30m, 2h 30m, 1.5h)
-4. В конце собери все данные и попроси подтверждение
+ЗАДАЧИ ПОЛЬЗОВАТЕЛЯ:
+%s
+ФЛОУ ДИАЛОГА (строго по шагам):
+
+ШАГ 1 — Что делал?
+- Приветствуй пользователя и попроси свободно рассказать, чем он занимался сегодня.
+- НЕ спрашивай о каждой задаче по отдельности.
+- Пользователь описывает активности своими словами.
+
+ШАГ 2 — Сопоставление с задачами
+- На основе рассказа предложи, к каким задачам из списка относится каждая активность.
+- Если пользователь явно упомянул ключ задачи (например PROJ-456), которого нет в списке — прими его как есть.
+- Если что-то неясно (не понятно к какой задаче отнести) — уточни.
+- Дождись подтверждения от пользователя, что сопоставление верное.
+
+ШАГ 3 — Сколько времени?
+- Спроси, сколько времени пользователь потратил на каждую из задач.
+- Формат времени: 2h, 30m, 2h 30m, 1.5h.
+- Учитывай уже залогированное время — суммарно за день должно быть ровно 8h.
+- Если сумма нового времени + уже залогированного не равна 8h, обрати на это внимание пользователя.
+
+ШАГ 4 — Итог
+- Покажи финальную сводку в виде списка:
+  Задача | Время | Что делал
+- Попроси подтверждение.
+- После подтверждения верни JSON.
 
 ВАЖНО:
 - Общайся естественно, как живой человек
 - Не используй формальный тон
-- Задавай уточняющие вопросы при необходимости
 - Будь позитивным и поддерживающим
 - Говори на русском языке
-- Когда собрал всю информацию, верни JSON в формате:
+- Когда пользователь подтвердил сводку, верни JSON в формате:
 `+"```json\n"+`{
   "work_logs": [
     {
@@ -177,7 +221,7 @@ func buildSystemPrompt(issues []jira.Issue) string {
   "ready_to_submit": true
 }
 `+"```\n"+`
-Начинай диалог!`, sb.String())
+Начинай диалог!`, timeInfo, sb.String())
 }
 
 func extractText(resp *genai.GenerateContentResponse) string {

@@ -1,19 +1,31 @@
 package config
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/charmbracelet/huh"
 )
+
+const DefaultGeminiModel = "gemini-3-flash-preview"
 
 type Config struct {
 	JiraURL      string `json:"jira_url"`
 	JiraEmail    string `json:"jira_email"`
 	JiraAPIToken string `json:"jira_api_token"`
 	GeminiAPIKey string `json:"gemini_api_key"`
+	GeminiModel  string `json:"gemini_model"`
+}
+
+func GeminiModelOptions() []huh.Option[string] {
+	return []huh.Option[string]{
+		huh.NewOption("Gemini 3 Flash", "gemini-3-flash-preview"),
+		huh.NewOption("Gemini 2.5 Flash", "gemini-2.5-flash"),
+		huh.NewOption("Gemini 2.5 Flash", "gemini-2.5-flash-lite"),
+	}
 }
 
 func configDir() string {
@@ -40,6 +52,9 @@ func LoadFromFile() (*Config, error) {
 		return nil, fmt.Errorf("invalid config file: %w", err)
 	}
 	cfg.JiraURL = strings.TrimRight(cfg.JiraURL, "/")
+	if cfg.GeminiModel == "" {
+		cfg.GeminiModel = DefaultGeminiModel
+	}
 	return &cfg, nil
 }
 
@@ -54,56 +69,70 @@ func Save(cfg *Config) error {
 	return os.WriteFile(configPath(), data, 0600)
 }
 
-func mask(s string) string {
-	if len(s) <= 4 {
-		return "****"
-	}
-	return strings.Repeat("*", len(s)-4) + s[len(s)-4:]
-}
-
-func prompt(scanner *bufio.Scanner, label, current string, secret bool) string {
-	if current != "" {
-		displayed := current
-		if secret {
-			displayed = mask(current)
-		}
-		fmt.Printf("%s [%s]: ", label, displayed)
-	} else {
-		fmt.Printf("%s: ", label)
-	}
-	scanner.Scan()
-	val := strings.TrimSpace(scanner.Text())
-	if val == "" {
-		return current
-	}
-	return val
-}
-
 func RunSetup() (*Config, error) {
 	var existing Config
 	if cfg, err := LoadFromFile(); err == nil {
 		existing = *cfg
 	}
+	if existing.GeminiModel == "" {
+		existing.GeminiModel = DefaultGeminiModel
+	}
 
-	fmt.Println("=== Secretary Configuration ===")
-	fmt.Println()
+	cfg := existing
 
-	scanner := bufio.NewScanner(os.Stdin)
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Jira URL").
+				Placeholder("https://your-org.atlassian.net").
+				Value(&cfg.JiraURL).
+				Validate(func(s string) error {
+					if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+						return fmt.Errorf("URL must start with http:// or https://")
+					}
+					return nil
+				}),
+			huh.NewInput().
+				Title("Jira Email").
+				Placeholder("you@company.com").
+				Value(&cfg.JiraEmail).
+				Validate(func(s string) error {
+					if !strings.Contains(s, "@") {
+						return fmt.Errorf("must be a valid email address")
+					}
+					return nil
+				}),
+		).Title("Jira Connection"),
 
-	cfg := &Config{
-		JiraURL:      prompt(scanner, "Jira URL", existing.JiraURL, false),
-		JiraEmail:    prompt(scanner, "Jira Email", existing.JiraEmail, false),
-		JiraAPIToken: prompt(scanner, "Jira API Token", existing.JiraAPIToken, true),
-		GeminiAPIKey: prompt(scanner, "Gemini API Key", existing.GeminiAPIKey, true),
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Jira API Token").
+				EchoMode(huh.EchoModePassword).
+				Value(&cfg.JiraAPIToken),
+			huh.NewInput().
+				Title("Gemini API Key").
+				EchoMode(huh.EchoModePassword).
+				Value(&cfg.GeminiAPIKey),
+		).Title("API Tokens"),
+
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Gemini Model").
+				Options(GeminiModelOptions()...).
+				Value(&cfg.GeminiModel),
+		).Title("AI Model"),
+	)
+
+	if err := form.Run(); err != nil {
+		return nil, err
 	}
 
 	cfg.JiraURL = strings.TrimRight(cfg.JiraURL, "/")
 
-	if err := Save(cfg); err != nil {
+	if err := Save(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Println()
-	fmt.Printf("Config saved to %s\n", configPath())
-	return cfg, nil
+	fmt.Printf("\nConfig saved to %s\n", configPath())
+	return &cfg, nil
 }

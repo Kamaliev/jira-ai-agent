@@ -1,0 +1,371 @@
+mode: rule
+mixed-port: 7897
+socks-port: 7890
+allow-lan: true
+log-level: info
+ipv6: true
+external-controller: 127.0.0.1:9097
+secret: set-your-secret
+unified-delay: true
+dns:
+  enable: true
+  use-hosts: true
+  enhanced-mode: redir-host
+  fake-ip-range: 198.18.0.1/16
+  default-nameserver:
+    - tls://1.1.1.1
+    - tls://1.0.0.1
+    - tls://8.8.8.8
+    - tls://8.8.4.4
+    - tls://9.9.9.9
+    - https://8.8.8.8/dns-query
+    - https://1.1.1.1/dns-query
+    - https://9.9.9.9/dns-query
+  nameserver:
+    - https://cloudflare-dns.com/dns-query#PROXY
+  fake-ip-filter:
+    - '*.lan'
+    - stun.*.*.*
+    - stun.*.*
+    - time.windows.com
+    - time.nist.gov
+    - time.apple.com
+    - time.asia.apple.com
+    - '*.openwrt.pool.ntp.org'
+    - pool.ntp.org
+    - ntp.ubuntu.com
+    - time1.apple.com
+    - time2.apple.com
+    - time3.apple.com
+    - time4.apple.com
+    - time5.apple.com
+    - time6.apple.com
+    - time7.apple.com
+    - time1.google.com
+    - time2.google.com
+    - time3.google.com
+    - time4.google.com
+    - api.joox.com
+    - joox.com
+    - '*.xiami.com'
+    - '*.msftconnecttest.com'
+    - '*.msftncsi.com'
+    - +.xboxlive.com
+    - '*.*.stun.playstation.net'
+    - xbox.*.*.microsoft.com
+    - '*.ipv6.microsoft.com'
+    - speedtest.cros.wr.pvp.net
+  prefer-h3: true
+  use-system-hosts: true
+  listen: 127.0.0.1:53
+  ipv6: false
+  proxy-server-nameserver:
+    - tls://1.1.1.1
+    - tls://1.0.0.1
+    - tls://8.8.8.8
+    - tls://8.8.4.4
+    - tls://9.9.9.9
+    - https://8.8.8.8/dns-query
+    - https://cloudflare-dns.com/dns-query
+    - https://9.9.9.9/dns-query
+  direct-nameserver:
+    - tls://77.88.8.8#DIRECT
+    - https://77.88.8.8/dns-query#DIRECT
+sniffer:
+  enable: true
+  parse-pure-ip: true
+  force-dns-mapping: true
+  sniff:
+    HTTP: null
+    TLS: null
+    QUIC: null
+external-controller-cors:
+  allow-private-network: true
+  allow-origins:
+    - tauri://localhost
+    - http://tauri.localhost
+    - https://yacd.metacubex.one
+    - https://metacubex.github.io
+    - https://board.zash.run.place
+tun:
+  auto-detect-interface: true
+  auto-route: true
+  device: utun1024
+  dns-hijack:
+    - any:53
+  mtu: 1500
+  route-exclude-address: []
+  stack: system
+  strict-route: false
+  enable: true
+profile:
+  store-selected: true
+external-controller-unix: /tmp/verge/verge-mihomo.sock
+proxies:
+  - name: hadlweik
+    type: vless
+    server: reality.merrai.ai
+    port: 8443
+    network: tcp
+    udp: true
+    tls: true
+    servername: www.google.com
+    reality-opts:
+      public-key: wRPXOzc62zMB2c52F19yDBudZqamnYw-RecIQbZnVXM
+      short-id: 0123456789abcdef
+    client-fingerprint: chrome
+    uuid: f36439e2-99d1-4af1-b799-e9b96b378241
+    packet-encoding: xudp
+    flow: xtls-rprx-vision
+  - name: frankfurt
+    type: vless
+    server: 94.231.205.71
+    port: 8443
+    network: tcp
+    udp: true
+    tls: true
+    servername: www.google.com
+    reality-opts:
+      public-key: IhHBpoDmKKkmrRz3m_Nc3x6JOCuAy1BDzhgHmDKm0Aw
+      short-id: ''
+    client-fingerprint: chrome
+    uuid: f36439e2-99d1-4af1-b799-e9b96b378241
+    packet-encoding: xudp
+    flow: xtls-rprx-vision
+proxy-providers:
+  sub:
+    type: http
+    url: https://subs.merrai.ai/h0fSfqEqPpxqBWjC
+    path: ./proxy_providers/base64.yaml
+    interval: 3600
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+      timeout: 5000
+      lazy: true
+      expected-status: 204
+    override:
+      tfo: true
+      mptcp: true
+      udp: true
+proxy-groups:
+  - name: VPN
+    type: select
+    include-all: true
+  - name: Telegram
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Telegram.png
+    include-all: true
+    proxies:
+      - VPN
+      - DIRECT
+  - name: WhatsApp
+    type: select
+    icon: https://github.com/OMchik33/Whatsapp-icon/blob/master/icons/whatsapp_194x194.png?raw=true
+    proxies:
+      - VPN
+      - DIRECT
+  - name: Steam
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Steam.png
+    include-all: true
+    proxies:
+      - DIRECT
+      - VPN
+  - name: YouTube
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png
+    include-all: true
+    proxies:
+      - DIRECT
+      - VPN
+  - name: Twitch
+    type: select
+    icon: https://img.icons8.com/3d-fluency/94/twitch.png
+    proxies:
+      - DIRECT
+      - VPN
+  - name: AI & Разработка
+    type: select
+    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Dark/Bot.png
+    include-all: true
+    proxies:
+      - VPN
+      - DIRECT
+rule-providers:
+  telegram-domain:
+    type: http
+    behavior: domain
+    format: mrs
+    url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/telegram.mrs
+    path: ./rule-sets/telegram-domain.mrs
+    interval: 86400
+  telegram-ips:
+    type: http
+    behavior: ipcidr
+    format: yaml
+    url: https://raw.githubusercontent.com/OMchik33/custom-rules/refs/heads/main/mihomo/telegram-ips.yaml
+    path: ./rule-sets/telegram-ips.yaml
+    interval: 86400
+  whatsapp-domain:
+    type: http
+    behavior: domain
+    format: mrs
+    url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/whatsapp.mrs
+    path: ./rule-sets/whatsapp-domain.mrs
+    interval: 86400
+  steam-domain:
+    type: http
+    behavior: domain
+    format: yaml
+    url: https://raw.githubusercontent.com/OMchik33/custom-rules/refs/heads/main/mihomo/gaming-domains.yaml
+    path: ./rule-sets/steam-domain.yaml
+    interval: 86400
+  steam-ips:
+    type: http
+    behavior: ipcidr
+    format: yaml
+    url: https://raw.githubusercontent.com/OMchik33/custom-rules/refs/heads/main/mihomo/gaming-ips.yaml
+    path: ./rule-sets/steam-ips.yaml
+    interval: 86400
+  youtube:
+    type: http
+    behavior: domain
+    format: mrs
+    url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/youtube.mrs
+    path: ./rule-sets/youtube.mrs
+    interval: 86400
+  twitch-domain:
+    type: http
+    behavior: domain
+    format: mrs
+    url: https://github.com/MetaCubeX/meta-rules-dat/raw/refs/heads/meta/geo/geosite/twitch.mrs
+    path: ./rule-sets/twitch-domain.mrs
+    interval: 86400
+  discord_domains:
+    type: http
+    behavior: domain
+    format: mrs
+    url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/discord.mrs
+    path: ./rule-sets/discord_domains.mrs
+    interval: 86400
+  discord_voiceips:
+    type: http
+    behavior: ipcidr
+    format: mrs
+    url: https://github.com/legiz-ru/mihomo-rule-sets/raw/main/other/discord-voice-ip-list.mrs
+    path: ./rule-sets/discord_voiceips.mrs
+    interval: 86400
+  oisd_big:
+    type: http
+    behavior: domain
+    format: mrs
+    url: https://github.com/legiz-ru/mihomo-rule-sets/raw/main/oisd/big.mrs
+    path: ./oisd/big.mrs
+    interval: 86400
+  ru-bundle:
+    type: http
+    behavior: domain
+    format: mrs
+    url: https://github.com/legiz-ru/mihomo-rule-sets/raw/main/ru-bundle/rule.mrs
+    path: ./ru-bundle/rule.mrs
+    interval: 86400
+  github-ai:
+    type: inline
+    behavior: classical
+    format: text
+    payload:
+      - DOMAIN-SUFFIX,githubcopilot.com
+      - DOMAIN-SUFFIX,github.dev
+      - DOMAIN-SUFFIX,github.com
+      - DOMAIN-SUFFIX,githubusercontent.com
+      - DOMAIN-SUFFIX,copilot-proxy.githubusercontent.com
+      - DOMAIN-SUFFIX,telemetry.individual.githubcopilot.com
+      - DOMAIN-SUFFIX,main.vscode-cdn.net
+      - DOMAIN-SUFFIX,api.github.com
+      - DOMAIN-SUFFIX,vscode.dev
+      - DOMAIN-SUFFIX,api.individual.githubcopilot.com
+      - DOMAIN-SUFFIX,marketplace.visualstudio.com
+      - DOMAIN-SUFFIX,vscode-cdn.net
+      - DOMAIN-SUFFIX,vscode.microsoft.com
+      - DOMAIN-SUFFIX,code.visualstudio.com
+      - DOMAIN-KEYWORD,copilot
+      - DOMAIN-KEYWORD,vscode
+      - DOMAIN-KEYWORD,github
+      - DOMAIN-SUFFIX,copilot.microsoft.com
+      - DOMAIN-SUFFIX,bing.com
+      - DOMAIN-SUFFIX,microsoftcopilot.app
+      - DOMAIN-SUFFIX,sydney.bing.com
+      - DOMAIN-SUFFIX,edgeservices.bing.com
+      - DOMAIN-SUFFIX,copilot.live.com
+      - DOMAIN-SUFFIX,openai.com
+      - DOMAIN-SUFFIX,api.openai.com
+      - DOMAIN-SUFFIX,chat.openai.com
+      - DOMAIN-SUFFIX,chatgpt.com
+      - DOMAIN-SUFFIX,platform.openai.com
+      - DOMAIN-KEYWORD,openai
+      - DOMAIN-KEYWORD,chatgpt
+      - DOMAIN-SUFFIX,gemini.google.com
+      - DOMAIN-SUFFIX,bard.google.com
+      - DOMAIN-SUFFIX,ai.google.dev
+      - DOMAIN-SUFFIX,ai.google.com
+      - DOMAIN-SUFFIX,makersuite.google.com
+      - DOMAIN-SUFFIX,generativeai.google
+      - DOMAIN-SUFFIX,aistudio.google.com
+      - DOMAIN-KEYWORD,gemini
+      - DOMAIN-KEYWORD,bard
+      - DOMAIN-SUFFIX,claude.ai
+      - DOMAIN-SUFFIX,anthropic.com
+      - DOMAIN-SUFFIX,console.anthropic.com
+      - DOMAIN-KEYWORD,claude
+      - DOMAIN-KEYWORD,anthropic
+      - DOMAIN-SUFFIX,x.ai
+      - DOMAIN-SUFFIX,grok.x.ai
+      - DOMAIN-SUFFIX,api.x.ai
+      - DOMAIN-KEYWORD,grok
+      - DOMAIN-SUFFIX,perplexity.ai
+      - DOMAIN-SUFFIX,pplx.ai
+      - DOMAIN-KEYWORD,perplexity
+      - DOMAIN-SUFFIX,huggingface.co
+      - DOMAIN-SUFFIX,hf.co
+      - DOMAIN-SUFFIX,huggingface.com
+      - DOMAIN-KEYWORD,huggingface
+      - DOMAIN-SUFFIX,midjourney.com
+      - DOMAIN-SUFFIX,cdn.midjourney.com
+      - DOMAIN-KEYWORD,midjourney
+      - DOMAIN-SUFFIX,stability.ai
+      - DOMAIN-SUFFIX,stablediffusionweb.com
+      - DOMAIN-SUFFIX,dreamstudio.ai
+      - DOMAIN-SUFFIX,runwayml.com
+      - DOMAIN-SUFFIX,runway.ml
+      - DOMAIN-SUFFIX,character.ai
+      - DOMAIN-SUFFIX,beta.character.ai
+      - DOMAIN-SUFFIX,replicate.com
+      - DOMAIN-SUFFIX,cohere.ai
+      - DOMAIN-SUFFIX,cohere.com
+      - DOMAIN-SUFFIX,jetbrains.com
+      - DOMAIN-SUFFIX,replit.com
+      - DOMAIN-SUFFIX,repl.it
+      - DOMAIN-SUFFIX,stackoverflow.com
+      - DOMAIN-SUFFIX,docker.com
+      - DOMAIN-SUFFIX,docker.io
+      - DOMAIN-SUFFIX,npmjs.com
+      - DOMAIN-SUFFIX,pypi.org
+rules:
+  - AND,((NETWORK,udp),(DST-PORT,135)),REJECT
+  - AND,((NETWORK,udp),(DST-PORT,137)),REJECT
+  - AND,((NETWORK,udp),(DST-PORT,138)),REJECT
+  - AND,((NETWORK,udp),(DST-PORT,139)),REJECT
+  - AND,((NETWORK,udp),(DST-PORT,443)),REJECT
+  - RULE-SET,github-ai,AI & Разработка
+  - OR,((RULE-SET,telegram-domain),(RULE-SET,telegram-ips)),Telegram
+  - RULE-SET,whatsapp-domain,WhatsApp
+  - OR,((RULE-SET,discord_domains),(RULE-SET,discord_voiceips)),VPN
+  - OR,((RULE-SET,steam-domain),(RULE-SET,steam-ips)),Steam
+  - RULE-SET,youtube,YouTube
+  - RULE-SET,twitch-domain,Twitch
+  - RULE-SET,ru-bundle,VPN
+  - OR,((DOMAIN,ipwho.is),(DOMAIN,api.ip.sb),(DOMAIN,ipapi.co),(DOMAIN,ipinfo.io)),VPN
+  - RULE-SET,oisd_big,REJECT
+  - MATCH,DIRECT

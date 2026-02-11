@@ -51,7 +51,7 @@ func main() {
 
 	jiraClient := jira.NewClient(cfg.JiraURL, cfg.JiraEmail, cfg.JiraAPIToken)
 
-	geminiAssistant, err := gemini.NewAssistant(ctx, cfg.GeminiAPIKey)
+	geminiAssistant, err := gemini.NewAssistant(ctx, cfg.GeminiAPIKey, cfg.GeminiModel)
 	if err != nil {
 		pterm.Error.Println("Ошибка при инициализации Gemini: " + err.Error())
 		os.Exit(1)

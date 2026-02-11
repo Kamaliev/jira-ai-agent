@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go-secretary/internal/gemini"
@@ -26,26 +27,53 @@ func NewRunner(jiraClient *jira.Client, geminiAssistant *gemini.Assistant) *Runn
 func (r *Runner) Run(ctx context.Context) error {
 	ui.PrintWelcome()
 
-	// Fetch issues with spinner
+	// Fetch user's own issues to display as a reminder
 	spinner, _ := pterm.DefaultSpinner.Start("Получаю твои задачи из Jira...")
-	issues, err := r.jira.GetInProgressIssues(ctx)
+	myIssues, err := r.jira.GetMyIssues(ctx)
 	spinner.Stop()
 	if err != nil {
 		ui.PrintError("Ошибка при получении задач из Jira: " + err.Error())
 		return err
 	}
 
-	if len(issues) == 0 {
+	if len(myIssues) > 0 {
+		ui.PrintIssuesTable(myIssues)
+	}
+
+	// Fetch all issues for Gemini context
+	spinner, _ = pterm.DefaultSpinner.Start("Загружаю все задачи проекта...")
+	allIssues, err := r.jira.GetAllIssues(ctx)
+	spinner.Stop()
+	if err != nil {
+		ui.PrintError("Ошибка при получении задач из Jira: " + err.Error())
+		return err
+	}
+
+	if len(allIssues) == 0 {
 		ui.PrintNoIssues()
 		return nil
 	}
 
-	ui.PrintIssuesTable(issues)
-	ui.PrintStatus("Сейчас AI-ассистент проведёт с тобой интервью...")
+	// Check today's already logged time
+	spinner, _ = pterm.DefaultSpinner.Start("Проверяю ворклоги за сегодня...")
+	loggedSeconds, err := r.jira.GetTodayLoggedSeconds(ctx)
+	spinner.Stop()
+	if err != nil {
+		ui.PrintError("Ошибка при получении ворклогов: " + err.Error())
+		return err
+	}
+
+	if loggedSeconds > 0 {
+		h := loggedSeconds / 3600
+		m := (loggedSeconds % 3600) / 60
+		ui.PrintStatus(fmt.Sprintf("Сегодня уже залогировано: %dh %dm", h, m))
+	}
+
+	ui.PrintStatus("Расскажи AI-ассистенту, чем ты сегодня занимался...")
 	time.Sleep(1 * time.Second)
 
-	// Start AI interview
-	response, err := r.gemini.StartInterview(ctx, issues)
+	// Start AI conversation
+	response, err := r.gemini.StartConversation(ctx, allIssues, loggedSeconds)
 	if err != nil {
 		ui.PrintError("Ошибка при общении с Gemini: " + err.Error())
 		return err
@@ -89,7 +117,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	workLogs := r.gemini.ExtractWorkLogs(response)
 	if workLogs == nil {
 		ui.PrintStatus("Собираю данные...")
-		response, err = r.gemini.SendMessage(ctx, "Отлично! Теперь, пожалуйста, верни мне все собранные данные в JSON формате.")
+		response, err = r.gemini.SendMessage(ctx, "Пожалуйста, подведи итог и верни все собранные данные в JSON формате.")
 		if err == nil {
 			workLogs = r.gemini.ExtractWorkLogs(response)
 		}

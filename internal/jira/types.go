@@ -7,7 +7,10 @@ type Issue struct {
 }
 
 type searchResponse struct {
-	Issues []searchIssue `json:"issues"`
+	StartAt    int           `json:"startAt"`
+	MaxResults int           `json:"maxResults"`
+	Total      int           `json:"total"`
+	Issues     []searchIssue `json:"issues"`
 }
 
 type searchIssue struct {
@@ -27,4 +30,24 @@ type issueStatus struct {
 type worklogPayload struct {
 	TimeSpentSeconds int    `json:"timeSpentSeconds"`
 	Comment          string `json:"comment"`
+}
+
+type myselfResponse struct {
+	AccountID string `json:"accountId"`
+	Name      string `json:"name"`
+}
+
+type worklogListResponse struct {
+	Worklogs []worklogEntry `json:"worklogs"`
+}
+
+type worklogEntry struct {
+	Author           worklogAuthor `json:"author"`
+	TimeSpentSeconds int           `json:"timeSpentSeconds"`
+	Started          string        `json:"started"`
+}
+
+type worklogAuthor struct {
+	AccountID string `json:"accountId"`
+	Name      string `json:"name"`
 }
